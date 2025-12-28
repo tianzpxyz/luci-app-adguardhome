@@ -282,3 +282,9 @@ msgstr "测试版本"
 
 msgid "Core Update URL"
 msgstr "核心更新网址"
+
+msgid "WAN Interface"
+msgstr "WAN 接口"
+
+msgid "Only effective in redirect mode, bypass specified interfaces to avoid becoming a public DNS resolver"
+msgstr "仅在重定向模式下生效，绕过指定接口以避免成为公共 DNS 解析器"
