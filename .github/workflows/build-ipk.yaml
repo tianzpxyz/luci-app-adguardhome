@@ -15,10 +15,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        openwrt_branch: ['24.10']
-      fail-fast: false
 
     steps:
       - name: 检出代码
@@ -26,54 +22,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 获取 OpenWrt ${{ matrix.openwrt_branch }} 最新稳定版本
-        run: |
-          set -eux
-          BASE_URL="https://downloads.openwrt.org/releases/"
-          BRANCH="${{ matrix.openwrt_branch }}"
-          
-          LATEST_RELEASE=$(curl -fsSL "$BASE_URL" | \
-            grep -oE "href=\"${BRANCH}\.[0-9]+/\"" | \
-            grep -oE "${BRANCH}\.[0-9]+" | \
-            sort -V | \
-            tail -n1)
-          
-          if [ -z "$LATEST_RELEASE" ]; then
-            echo "错误: 无法获取 ${BRANCH} 的最新稳定版本"
-            exit 1
-          fi
-          
-          echo "检测到 ${BRANCH} 最新稳定版本: ${LATEST_RELEASE}"
-          echo "RELEASE=${LATEST_RELEASE}" >> "$GITHUB_ENV"
-          echo "OPENWRT_BRANCH=${BRANCH}" >> "$GITHUB_ENV"
-
-      - name: 验证 tag 格式
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          echo "使用 Tag: ${TAG}"
-          if ! echo "${TAG}" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$'; then
-            echo "Tag 格式错误"
-            exit 1
-          fi
-          VERSION=$(echo "${TAG}" | sed 's/^v//' | cut -d'-' -f1)
-          RELEASE=$(echo "${TAG}" | cut -d'-' -f2)
-          echo "PKG_VERSION: ${VERSION}"
-          echo "PKG_RELEASE: ${RELEASE}"
-          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${VERSION}/" Makefile
-          sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${RELEASE}/" Makefile
-          grep -n '^PKG_VERSION:=\|^PKG_RELEASE:=' Makefile || true
-
-      - name: 安装构建依赖
+      - name: 安装依赖
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
-            python3-setuptools rsync swig unzip zlib1g-dev file wget zstd
+            python3-setuptools rsync swig unzip zlib1g-dev file wget zstd jq
 
       - name: 下载并解压 SDK
         run: |
-          set -eux
+          set -euo pipefail
+
+          echo "🔍 获取 OpenWrt 最新稳定版..."
+          LATEST_TAG=$(
+            curl -fsSL https://api.github.com/repos/openwrt/openwrt/releases?per_page=50 \
+            | jq -r '.[] | select(.prerelease==false) | .tag_name' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n 1
+          )
+
+          if [[ -z "${LATEST_TAG}" || "${LATEST_TAG}" == "null" ]]; then
+            echo "❌ 获取 OpenWrt tag 失败"
+            exit 1
+          fi
+
+          RELEASE="${LATEST_TAG#v}"
+          echo "检测到最新稳定版本: ${RELEASE}"
+
+          echo "📥 下载 SDK..."
           BASE="https://downloads.openwrt.org/releases/${RELEASE}/targets/${TARGET}/${SUBTARGET}/"
           SDK_TARBALL=$(curl -fsSL "$BASE" | grep -o 'openwrt-sdk-[^"]*\.tar\.zst' | head -n1)
           mkdir -p _sdk
@@ -81,7 +58,7 @@ jobs:
           tar --zstd -xf _sdk/sdk.tar.zst -C _sdk
           SDK_DIR="$(find "$PWD/_sdk" -maxdepth 1 -type d -name 'openwrt-sdk-*' -print -quit)"
           echo "SDK_DIR=${SDK_DIR}" >> "$GITHUB_ENV"
-          echo "Resolved SDK_DIR=${SDK_DIR}"
+          echo "✅ SDK 已解压到: ${SDK_DIR}"
 
       - name: 将包拷入 SDK
         run: |
@@ -107,24 +84,9 @@ jobs:
           make package/${PKG_DIR_NAME}/clean V=s || true
           make package/${PKG_DIR_NAME}/compile -j"$(nproc)" V=sc
 
-      - name: 收集构建产物
-        run: |
-          cd "$SDK_DIR"
-          mkdir -p "$GITHUB_WORKSPACE/out"
-          find bin/packages -type f -name "*${PKG_DIR_NAME}*ipk" -print -exec cp -f {} "$GITHUB_WORKSPACE/out/" \;
-          cd "$GITHUB_WORKSPACE/out" && sha256sum *.ipk > SHA256SUMS.txt || true && ls -l
-
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: ipks-${{ github.ref_name }}-openwrt${{ matrix.openwrt_branch }}-x86_64
-          path: out/
-          if-no-files-found: error
-
-      - name: 发布到 Releases
+      - name: 发布 Releases
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            out/*.ipk
+          files: ${{ env.SDK_DIR }}/bin/packages/*/*${{ env.PKG_DIR_NAME }}*.ipk
