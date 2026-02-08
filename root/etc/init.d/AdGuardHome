@@ -379,7 +379,7 @@ start_service() {
 
     config_get upprotect $CONFIGURATION upprotect ""
     eval upprotect=${upprotect// /\\\\n}
-    echo -e "$upprotect" > /lib/upgrade/keep.d/luci-app-adguardhome
+    printf '%b\n' "$upprotect" > /lib/upgrade/keep.d/luci-app-adguardhome
 
     config_get logfile $CONFIGURATION logfile ""
     if [ -n "$logfile" ]; then
