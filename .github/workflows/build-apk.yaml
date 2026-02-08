@@ -1,0 +1,90 @@
+name: build-apk
+
+on:
+  push:
+    tags: ['*']
+
+permissions:
+  contents: write
+
+env:
+  TARGET: x86
+  SUBTARGET: 64
+  PKG_DIR_NAME: luci-app-adguardhome
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+            python3-setuptools rsync swig unzip zlib1g-dev file wget zstd jq
+
+      - name: 下载 SDK
+        run: |
+          set -euo pipefail
+
+          echo "🔍 获取 OpenWrt 25.12 最新版本..."
+          LATEST_TAG=$(
+            curl -fsSL https://api.github.com/repos/openwrt/openwrt/releases?per_page=50 \
+            | jq -r '.[].tag_name' \
+            | grep -E '^v25\.12\.[0-9]+(-rc[0-9]+)?$' \
+            | sort -V \
+            | tail -n 1
+          )
+
+          if [[ -z "${LATEST_TAG}" || "${LATEST_TAG}" == "null" ]]; then
+            echo "❌ 获取 OpenWrt 25.12.x tag 失败"
+            exit 1
+          fi
+
+          RELEASE="${LATEST_TAG#v}"
+          echo "检测到 25.12 系列最新版本: ${RELEASE}"
+
+          echo "📥 下载 SDK..."
+          BASE="https://downloads.openwrt.org/releases/${RELEASE}/targets/${TARGET}/${SUBTARGET}/"
+          SDK_TARBALL=$(curl -fsSL "$BASE" | grep -o 'openwrt-sdk-[^"]*\.tar\.zst' | head -n1)
+          mkdir -p _sdk
+          wget -q "${BASE}${SDK_TARBALL}" -O _sdk/sdk.tar.zst
+          tar --zstd -xf _sdk/sdk.tar.zst -C _sdk
+          SDK_DIR="$(find "$PWD/_sdk" -maxdepth 1 -type d -name 'openwrt-sdk-*' -print -quit)"
+          echo "SDK_DIR=${SDK_DIR}" >> "$GITHUB_ENV"
+          echo "✅ SDK 已解压到: ${SDK_DIR}"
+
+      - name: 构建包
+        run: |
+          cd "$SDK_DIR"
+
+          mkdir -p package/${PKG_DIR_NAME}
+          rsync -a --delete "$GITHUB_WORKSPACE/" "package/${PKG_DIR_NAME}/" \
+            --exclude '.git*' --exclude '_sdk'
+
+          ./scripts/feeds update luci
+          ./scripts/feeds install luci-base
+
+          make defconfig
+
+          make package/${PKG_DIR_NAME}/clean V=s || true
+          make package/${PKG_DIR_NAME}/compile -j"$(nproc)" V=sc
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ github.ref_name }}
+          path: _sdk/**/bin/packages/**/${{ env.PKG_DIR_NAME }}*
+          if-no-files-found: error
+
+      - name: 发布到 Releases
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: _sdk/**/bin/packages/**/${{ env.PKG_DIR_NAME }}*
