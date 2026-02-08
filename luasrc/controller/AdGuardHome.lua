@@ -19,31 +19,13 @@ page.acl_depends = { "luci-app-adguardhome" }
     entry({"admin", "services", "AdGuardHome", "gettemplateconfig"}, call("get_template_config"))
 end
 function get_template_config()
-	local b
-	local d=""
-	for cnt in io.lines("/tmp/resolv.conf.auto") do
-		b=string.match (cnt,"^[^#]*nameserver%s+([^%s]+)$")
-		if (b~=nil) then
-			d=d.."  - "..b.."\n"
-		end
+	local template_file = "/usr/share/AdGuardHome/AdGuardHome_template.yaml"
+	local content = ""
+	if fs.access(template_file) then
+		content = fs.readfile(template_file) or ""
 	end
-	local f=io.open("/usr/share/AdGuardHome/AdGuardHome_template.yaml", "r+")
-	local tbl = {}
-	local a=""
-	while (1) do
-    	a=f:read("*l")
-		if (a=="#bootstrap_dns") then
-			a=d
-		elseif (a=="#upstream_dns") then
-			a=d
-		elseif (a==nil) then
-			break
-		end
-		table.insert(tbl, a)
-	end
-	f:close()
 	http.prepare_content("text/plain; charset=utf-8")
-	http.write(table.concat(tbl, "\n"))
+	http.write(content)
 end
 function reload_config()
 	fs.remove("/tmp/AdGuardHometmpconfig.yaml")
