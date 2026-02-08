@@ -41,10 +41,6 @@ else
 	e=version..e
 end
 
-o = s:option(ListValue, "core_version", translate("Core Version"))
-o:value("latest", translate("Latest Version"))
-o:value("beta", translate("Beta Version"))
-o.default = "latest"
 o = s:option(Button, "restart", translate("Upgrade Core"))
 o.inputtitle=translate("Update core version")
 o.template = "AdGuardHome/AdGuardHome_check"
@@ -96,16 +92,6 @@ if fs.stat(value,"type")=="dir" then
 end
 return value
 end
-o = s:option(ListValue, "upxflag", translate("use upx to compress bin after download"))
-o:value("", translate("none"))
-o:value("-1", translate("compress faster"))
-o:value("-9", translate("compress better"))
-o:value("--best", translate("compress best(can be slow for big files)"))
-o:value("--brute", translate("try all available compression methods & filters [slow]"))
-o:value("--ultra-brute", translate("try even more compression variants [very slow]"))
-o.default     = ""
-o.description=translate("bin use less space,but may have compatibility issues")
-o.rmempty = true
 o = s:option(Value, "configpath", translate("Config Path"), translate("AdGuardHome config path"))
 o.default     = "/etc/AdGuardHome.yaml"
 o.datatype    = "string"
@@ -167,30 +153,6 @@ end
 o = s:option(Flag, "verbose", translate("Verbose log"))
 o.default = 0
 o.optional = true
-local a=luci.sys.call("grep -m 1 -q programadd "..configpath)
-if (a==0) then
-a="Added"
-else
-a="Not added"
-end
-o=s:option(Button,"gfwdel",translate("Del gfwlist"),translate(a))
-o.optional = true
-o.inputtitle=translate("Del")
-o.write=function()
-	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh del 2>&1")
-	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
-end
-o=s:option(Button,"gfwadd",translate("Add gfwlist"),translate(a))
-o.optional = true
-o.inputtitle=translate("Add")
-o.write=function()
-	luci.sys.exec("sh /usr/share/AdGuardHome/gfw2adg.sh 2>&1")
-	luci.http.redirect(luci.dispatcher.build_url("admin","services","AdGuardHome"))
-end
-o = s:option(Value, "gfwupstream", translate("Gfwlist upstream dns server"), translate("Gfwlist domain upstream dns service")..translate(a))
-o.default     = "tcp://208.67.220.220:5353"
-o.datatype    = "string"
-o.optional = true
 o = s:option(Value, "hashpass", translate("Change browser management password"), translate("Press load culculate model and culculate finally save/apply"))
 o.default     = ""
 o.datatype    = "string"
@@ -199,76 +161,12 @@ o.optional = true
 o = s:option(MultiValue, "upprotect", translate("Keep files when system upgrade"))
 o:value("$binpath",translate("core bin"))
 o:value("$configpath",translate("config file"))
-o:value("$logfile",translate("log file"))
-o:value("$workdir/data/sessions.db",translate("sessions.db"))
-o:value("$workdir/data/stats.db",translate("stats.db"))
-o:value("$workdir/data/querylog.json",translate("querylog.json"))
-o:value("$workdir/data/filters",translate("filters"))
 o.widget = "checkbox"
 o.default = nil
 o.optional=true
 o = s:option(Flag, "waitonboot", translate("On boot when network ok restart"))
 o.default = 1
 o.optional = true
-local workdir = uci:get("AdGuardHome", "AdGuardHome", "workdir") or "/usr/bin/AdGuardHome"
-o = s:option(MultiValue, "backupfile", translate("Backup workdir files when shutdown"))
-o1 = s:option(Value, "backupwdpath", translate("Backup workdir path"))
-local name
-o:value("filters","filters")
-o:value("stats.db","stats.db")
-o:value("querylog.json","querylog.json")
-o:value("sessions.db","sessions.db")
-o1:depends ("backupfile", "filters")
-o1:depends ("backupfile", "stats.db")
-o1:depends ("backupfile", "querylog.json")
-o1:depends ("backupfile", "sessions.db")
-for name in fs.glob(workdir.."/data/*")
-do
-	name=fs.basename (name)
-	if name~="filters" and name~="stats.db" and name~="querylog.json" and name~="sessions.db" then
-		o:value(name,name)
-		o1:depends ("backupfile", name)
-	end
-end
-o.widget = "checkbox"
-o.default = nil
-o.optional=false
-o.description=translate("Will be restore when workdir/data is empty")
-
-o1.default = "/usr/bin/AdGuardHome"
-o1.datatype    = "string"
-o1.optional = false
-o1.validate=function(self, value)
-if fs.stat(value,"type")=="reg" then
-	if m.message then
-	m.message =m.message.."\nerror!backup dir is a file"
-	else
-	m.message ="error!backup dir is a file"
-	end
-	return nil
-end
-if string.sub(value,-1)=="/" then
-	return string.sub(value, 1, -2)
-else
-	return value
-end
-end
-
-o = s:option(MultiValue, "crontab", translate("Crontab task"),translate("Please change time and args in crontab"))
-o:value("autoupdate",translate("Auto update core"))
-o:value("cutquerylog",translate("Auto tail querylog"))
-o:value("cutruntimelog",translate("Auto tail runtime log"))
-o:value("autohost",translate("Auto update ipv6 hosts and restart adh"))
-o:value("autogfw",translate("Auto update gfwlist and restart adh"))
-o.widget = "checkbox"
-o.default = nil
-o.optional=true
-
-o = s:option(Value, "update_url", translate("Core Update URL"))
-o.default = "https://github.com/AdguardTeam/AdGuardHome/releases/download/${Cloud_Version}/AdGuardHome_linux_${Arch}.tar.gz"
-o.placeholder = "https://github.com/AdguardTeam/AdGuardHome/releases/download/${Cloud_Version}/AdGuardHome_linux_${Arch}.tar.gz"
-o.rmempty = false
-o.optional = false
 
 function m.on_commit(map)
 	if (fs.access("/var/run/AdGserverdis")) then
