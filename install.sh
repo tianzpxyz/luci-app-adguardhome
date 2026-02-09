@@ -6,8 +6,8 @@ API="https://api.github.com/repos/${REPO}/releases/latest"
 
 URL="$(
   uclient-fetch -qO- "$API" \
-  | jsonfilter -e '@.assets[*].browser_download_url' \
-  | grep -m1 '\.apk$'
+  | jsonfilter -e '@.assets[@.name~="^luci-app-adguardhome-.*\\.apk$"].browser_download_url' \
+  | head -n1
 )"
 
 [ -n "$URL" ] || { echo "ERR: no .apk found in latest release assets"; exit 1; }
