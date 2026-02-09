@@ -6,8 +6,6 @@
 > ```
 > uclient-fetch -qO- https://raw.githubusercontent.com/w9315273/luci-app-adguardhome/master/install.sh | sh
 > ```
-> 
->
 
 ### luci-app-adguardhome（nft 版）简要说明
 
