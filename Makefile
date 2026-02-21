@@ -1,7 +1,8 @@
 #
 # Copyright (C) 2025 w9315273
 #
-# This is free software, licensed under the MIT License.
+# Based on https://github.com/rufengsuixing/luci-app-adguardhome
+# For personal learning and research only.
 #
 
 include $(TOPDIR)/rules.mk
@@ -10,8 +11,6 @@ PKG_NAME:=luci-app-adguardhome
 PKG_VERSION:=2.3.2
 PKG_RELEASE:=1
 
-PKG_LICENSE:=MIT
-PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=w9315273
 PKG_BUILD_DEPENDS:=luci-base/host
 
