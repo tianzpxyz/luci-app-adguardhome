@@ -9,7 +9,7 @@ if [ -z "$binpath" ]; then
 fi
 [ ! -d "${binpath%/*}" ] && mkdir -p "${binpath%/*}"
 enabled=$(uci get AdGuardHome.AdGuardHome.enabled 2>/dev/null)
-core_api_url="https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest"
+core_api_url="https://ghproxy.com/https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest"
 
 Check_Task(){
 	running_tasks=$(pgrep -f "update_core.sh" 2>/dev/null | grep -v "^$$\$" | wc -l)
@@ -61,7 +61,7 @@ Update_Core(){
 	rm -rf /tmp/AdGuardHome_Update > /dev/null 2>&1
 	mkdir -p "/tmp/AdGuardHome_Update"
 	GET_Arch
-	link="https://github.com/AdguardTeam/AdGuardHome/releases/download/${Cloud_Version}/AdGuardHome_linux_${Arch}.tar.gz"
+	link="https://ghproxy.com/https://github.com/AdguardTeam/AdGuardHome/releases/download/${Cloud_Version}/AdGuardHome_linux_${Arch}.tar.gz"
 	printf "%s\n" "下载链接:${link}"
 	printf "%s\n" "文件名称:${link##*/}"
 	printf "\n开始下载 AdGuardHome 核心文件 ...\n\n"
